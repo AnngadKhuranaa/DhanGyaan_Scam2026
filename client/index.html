@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>client</title>
+    <meta name="description" content="DhanGyaan: an AI-assisted investment risk evaluator and paper-trading platform for NSE and US stocks." />
+    <title>DhanGyaan · Investment risk evaluator & paper trading</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light/dark flash.
+      try {
+        var saved = JSON.parse(localStorage.getItem('dhangyaan-ui') || '{}').state;
+        var dark = saved && saved.theme ? saved.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

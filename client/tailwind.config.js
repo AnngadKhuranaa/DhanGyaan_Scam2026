@@ -1,12 +1,24 @@
+/**
+ * DhanGyaan design tokens.
+ * - brand:  indigo, for actions, focus rings and selected states
+ * - gain / loss: RESERVED for directional values (price change, P&L, sentiment).
+ *   Light-mode shades are 700-level so small text passes WCAG AA (>= 4.5:1 on white);
+ *   dark-mode shades are 400-level for the same contrast on slate-900.
+ * - warn: amber, for cautions that aren't losses
+ * Spacing uses Tailwind's 4px scale; type uses Inter (UI) + Outfit (display headings).
+ */
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: ['./index.html', './src/**/*.{js,jsx}'],
   darkMode: 'class',
   theme: {
     extend: {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Outfit', 'sans-serif'],
+        display: ['Outfit', 'Inter', 'sans-serif'],
+      },
+      fontSize: {
+        '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
       colors: {
         brand: {
@@ -21,50 +33,28 @@ export default {
           800: '#3730a3',
           900: '#312e81',
         },
-        surface: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-        },
+        gain: { DEFAULT: '#047857', soft: '#d1fae5', dark: '#34d399', 'dark-soft': '#064e3b' },
+        loss: { DEFAULT: '#be123c', soft: '#ffe4e6', dark: '#fb7185', 'dark-soft': '#4c0519' },
+        warn: { DEFAULT: '#b45309', soft: '#fef3c7', dark: '#fbbf24', 'dark-soft': '#451a03' },
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'brand-gradient': 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)',
-        'brand-gradient-soft': 'linear-gradient(135deg, rgba(79,70,229,0.12) 0%, rgba(59,130,246,0.08) 100%)',
+      borderRadius: {
+        xl: '0.875rem',
+        '2xl': '1.25rem',
       },
       boxShadow: {
-        glow: '0 20px 60px rgba(79, 70, 229, 0.18)',
-      },
-      animation: {
-        float: 'float 6s ease-in-out infinite',
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4,0,0.6,1) infinite',
-        'slide-up': 'slideUp 0.5s ease-out',
-        'fade-in': 'fadeIn 0.45s ease-out',
-        shimmer: 'shimmer 1.5s ease-in-out infinite',
-        'slide-right': 'slideRight 0.3s ease-out',
+        card: '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06)',
       },
       keyframes: {
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-12px)' },
-        },
-        slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
-        slideRight: {
-          '0%': { opacity: '0', transform: 'translateX(100%)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
+        shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+        'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+        'slide-in': { '0%': { transform: 'translateX(-100%)' }, '100%': { transform: 'translateX(0)' } },
+        'slide-in-right': { '0%': { transform: 'translateX(100%)' }, '100%': { transform: 'translateX(0)' } },
+      },
+      animation: {
+        shimmer: 'shimmer 1.6s linear infinite',
+        'fade-in': 'fade-in 0.2s ease-out',
+        'slide-in': 'slide-in 0.22s ease-out',
+        'slide-in-right': 'slide-in-right 0.22s ease-out',
       },
     },
   },

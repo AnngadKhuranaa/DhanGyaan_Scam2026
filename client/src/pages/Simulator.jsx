@@ -1,309 +1,168 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { FlaskConical, Repeat, X } from 'lucide-react';
+import { insightsService } from '../services';
+import { simulationSchema } from '../lib/schemas';
+import { formatCurrency, formatPercent } from '../utils/formatCurrency';
+import { formatDate } from '../utils/formatDate';
+import StockSearch from '../components/StockSearch';
+import FanChart from '../components/charts/FanChart';
+import Field from '../components/ui/Field';
+import { EmptyState, ErrorState, SkeletonRows, Spinner } from '../components/ui/States';
+import { Stat } from '../components/ui/Values';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const HORIZONS = [
+  [21, '1 month'],
+  [63, '3 months'],
+  [126, '6 months'],
+  [252, '1 year'],
+  [504, '2 years'],
+  [756, '3 years'],
+];
+
+const riskBadge = (level) => (level === 'Low' ? 'badge-gain' : level === 'High' ? 'badge-loss' : 'badge-warn');
+
+function Results({ r, onRerun, rerunning }) {
+  const amount = r.inputs.amount;
+  const pctOf = (v) => formatPercent(((v - amount) / amount) * 100);
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-xl font-semibold">{r.symbol} · {r.inputs.horizonDays} trading days · {r.inputs.paths.toLocaleString()} paths</h2>
+        <span className={riskBadge(r.riskLevel)}>{r.riskLevel} risk</span>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Stat label="Best case (95th percentile)" value={formatCurrency(r.outcomes.best, 'INR', 0)} sub={<span className="text-gain-c">{pctOf(r.outcomes.best)}</span>} />
+        <Stat label="Median outcome" value={formatCurrency(r.outcomes.median, 'INR', 0)} sub={<span className={r.outcomes.median >= amount ? 'text-gain-c' : 'text-loss-c'}>{pctOf(r.outcomes.median)}</span>} />
+        <Stat label="Worst case (5th percentile)" value={formatCurrency(r.outcomes.worst, 'INR', 0)} sub={<span className="text-loss-c">{pctOf(r.outcomes.worst)}</span>} />
+        <Stat label="Probability of loss" value={`${r.probabilityOfLoss.toFixed(1)}%`} sub={<span className="muted">of paths end below {formatCurrency(amount, 'INR', 0)}</span>} />
+        <Stat label="Value at Risk (95%)" value={formatCurrency(r.var95, 'INR', 0)} sub={<span className="muted">{r.var95Percent.toFixed(1)}% of the amount: only 5% of paths lose more</span>} />
+        <Stat label="Expected shortfall (CVaR 95%)" value={formatCurrency(r.cvar95, 'INR', 0)} sub={<span className="muted">average loss in the worst 5% of paths</span>} />
+      </div>
+
+      <section className="card">
+        <h3 className="card-title">Simulated value over time</h3>
+        <p className="muted mb-3 text-xs">Darkest band: middle 50% of paths (25th–75th pct). Light bands: out to the 5th and 95th percentiles. Line: median.</p>
+        <FanChart fan={r.fan} amount={amount} currency="INR" />
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="card">
+          <h3 className="card-title mb-3">Calibration (real data)</h3>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            <div><dt className="muted text-xs">Daily returns used</dt><dd className="tabular font-medium">{r.calibration.observations}</dd></div>
+            <div><dt className="muted text-xs">Window</dt><dd className="font-medium">{formatDate(r.calibration.from)} – {formatDate(r.calibration.to)}</dd></div>
+            <div><dt className="muted text-xs">Annualised return (μ)</dt><dd className="tabular font-medium">{formatPercent(r.calibration.annualizedReturnPercent)}</dd></div>
+            <div><dt className="muted text-xs">Annualised volatility (σ)</dt><dd className="tabular font-medium">{r.calibration.annualizedVolatilityPercent.toFixed(2)}%</dd></div>
+            <div><dt className="muted text-xs">Daily mean log return</dt><dd className="tabular font-medium">{r.calibration.dailyMeanLogReturn.toFixed(5)}</dd></div>
+            <div><dt className="muted text-xs">Daily σ</dt><dd className="tabular font-medium">{r.calibration.dailyVolatility.toFixed(5)}</dd></div>
+          </dl>
+          <p className="muted mt-4 font-mono text-xs">Vₜ₊₁ = Vₜ · exp(m + s·Z), Z ~ N(0,1)</p>
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+            <span className="muted">Seed {r.inputs.seed}</span>
+            <button type="button" className="btn-secondary px-2.5 py-1 text-xs" onClick={onRerun} disabled={rerunning}>
+              <Repeat size={13} aria-hidden="true" /> Re-run with same seed
+            </button>
+          </div>
+        </section>
+        <section className="card">
+          <h3 className="card-title mb-3">Assumptions & limits</h3>
+          <ul className="muted list-disc space-y-1.5 pl-5 text-sm">
+            {r.assumptions.map((a) => <li key={a}>{a}</li>)}
+          </ul>
+        </section>
+      </div>
+    </div>
+  );
+}
 
 export default function Simulator() {
-  const [formData, setFormData] = useState({
-    stock: '',
-    amount: '',
-    duration: '',
+  const [state, setState] = useState({ loading: false, result: null, error: null, lastPayload: null });
+  const { register, control, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(simulationSchema),
+    defaultValues: { symbol: '', amount: 100000, horizonDays: 252, paths: 2000, lookback: '2y' },
   });
-  const [results, setResults] = useState({
-    best: null,
-    worst: null,
-    average: null,
-    probabilityOfLoss: null,
-    risk: null,
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
-  // Autocomplete state
-  const [suggestions, setSuggestions] = useState([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setShowDropdown(false);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Fetch suggestions on stock input change
-  useEffect(() => {
-    const query = formData.stock.trim();
-
-    if (query.length < 1) {
-      setSuggestions([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    const timer = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/stocks/search?q=${encodeURIComponent(query)}`
-        );
-        const text = await response.text();
-        let data;
-
-        try {
-          data = JSON.parse(text);
-        } catch {
-          data = [];
-        }
-
-        setSuggestions(Array.isArray(data) ? data : []);
-        setShowDropdown(Array.isArray(data) && data.length > 0);
-      } catch {
-        setSuggestions([]);
-        setShowDropdown(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(timer);
-  }, [formData.stock]);
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-    setFormData((current) => ({ ...current, [name]: value }));
-  }
-
-  function handleSuggestionClick(symbol) {
-    setFormData((current) => ({ ...current, stock: symbol }));
-    setShowDropdown(false);
-    setSuggestions([]);
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setLoading(true);
-    setError('');
-
+  const run = async (payload) => {
+    setState((s) => ({ ...s, loading: true, error: null, lastPayload: payload }));
     try {
-      const response = await fetch(`${API_BASE_URL}/simulate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          stock: formData.stock,
-          amount: Number(formData.amount),
-          duration: Number(formData.duration),
-        }),
-      });
-
-      const text = await response.text();
-      console.log('RAW RESPONSE:', text);
-
-      let data;
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        throw new Error('Server returned HTML instead of JSON');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Simulation failed');
-      }
-
-      setResults({
-        best: data.best ?? null,
-        worst: data.worst ?? null,
-        average: data.average ?? null,
-        probabilityOfLoss: data.probabilityOfLoss ?? null,
-        risk: data.risk ?? null,
-      });
-    } catch (requestError) {
-      setError(requestError.message || 'Something went wrong');
-    } finally {
-      setLoading(false);
+      const result = await insightsService.simulate(payload);
+      setState({ loading: false, result, error: null, lastPayload: payload });
+    } catch (error) {
+      setState((s) => ({ ...s, loading: false, error }));
     }
-  }
-
-  const resultCards = [
-    {
-      label: 'Best Case',
-      value: results.best !== null ? `Rs ${results.best}` : '--',
-      tone: 'text-indigo-600',
-    },
-    {
-      label: 'Worst Case',
-      value: results.worst !== null ? `Rs ${results.worst}` : '--',
-      tone: 'text-rose-500',
-    },
-    {
-      label: 'Average',
-      value: results.average !== null ? `Rs ${results.average}` : '--',
-      tone: 'text-blue-600',
-    },
-    {
-      label: 'Probability of Loss',
-      value:
-        results.probabilityOfLoss !== null ? `${results.probabilityOfLoss}%` : '--',
-      tone: 'text-amber-500',
-    },
-  ];
-
-  const chartData = [
-    { name: 'Best', value: results.best ?? 0 },
-    { name: 'Worst', value: results.worst ?? 0 },
-    { name: 'Average', value: results.average ?? 0 },
-  ];
+  };
 
   return (
-    <section className="space-y-8">
-      <div className="section-header">
-        <h1 className="section-title">Simulator</h1>
-        <p className="section-copy">
-          Simulate investment outcomes with AI-driven risk analysis and probability modeling.
+    <div className="space-y-6">
+      <div>
+        <h1 className="page-title">Risk simulator</h1>
+        <p className="page-subtitle">
+          A Monte Carlo simulation using geometric Brownian motion, calibrated on the stock’s real daily returns. See the range of
+          outcomes, not just one forecast.
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="fintech-card animate-fade-in">
-          <form className="grid gap-5" onSubmit={handleSubmit}>
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-slate-600">Stock Name</span>
-              <div className="relative">
-                <input
-                  ref={inputRef}
-                  name="stock"
-                  type="text"
-                  value={formData.stock}
-                  onChange={handleChange}
-                  onFocus={() => {
-                    if (suggestions.length > 0) setShowDropdown(true);
-                  }}
-                  placeholder="e.g. AAPL"
-                  className="fintech-input w-full"
-                  autoComplete="off"
-                />
-
-                {showDropdown && suggestions.length > 0 && (
-                  <div
-                    ref={dropdownRef}
-                    className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl"
-                  >
-                    {suggestions.map((item) => (
-                      <button
-                        key={item.symbol}
-                        type="button"
-                        onClick={() => handleSuggestionClick(item.symbol)}
-                        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-indigo-50"
-                      >
-                        <span className="min-w-[60px] font-semibold text-indigo-600">
-                          {item.symbol}
-                        </span>
-                        <span className="text-sm text-slate-500">{item.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </label>
-
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-slate-600">Investment Amount</span>
-              <input
-                name="amount"
-                type="number"
-                value={formData.amount}
-                onChange={handleChange}
-                placeholder="e.g. 50000"
-                className="fintech-input"
-              />
-            </label>
-
-            <label className="grid gap-2">
-              <span className="text-sm font-medium text-slate-600">Duration (Months)</span>
-              <input
-                name="duration"
-                type="number"
-                value={formData.duration}
-                onChange={handleChange}
-                placeholder="e.g. 12"
-                className="fintech-input"
-              />
-            </label>
-
-            <button type="submit" disabled={loading} className="fintech-button mt-2">
-              {loading ? 'Running...' : 'Run Simulation'}
-            </button>
-
-            {error ? (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-500">
-                {error}
-              </div>
-            ) : null}
-          </form>
+      <form onSubmit={handleSubmit(run)} className="card grid gap-4 md:grid-cols-2 lg:grid-cols-6" noValidate>
+        <div className="md:col-span-2">
+          <span className="label">Stock</span>
+          <Controller
+            control={control}
+            name="symbol"
+            render={({ field }) =>
+              field.value ? (
+                <div className="flex h-[42px] items-center gap-2">
+                  <span className="badge-brand text-sm">{field.value}</span>
+                  <button type="button" className="icon-btn h-8 w-8" onClick={() => field.onChange('')} aria-label="Change stock"><X size={15} /></button>
+                </div>
+              ) : (
+                <StockSearch allMarkets onSelect={(s) => field.onChange(s.symbol)} placeholder="e.g. RELIANCE.NS or AAPL" />
+              )
+            }
+          />
+          {errors.symbol && <p className="field-error">{errors.symbol.message}</p>}
         </div>
-
-        <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {resultCards.map((result) => (
-              <div
-                key={result.label}
-                className="fintech-card animate-slide-up"
-              >
-                <p className="text-sm font-medium text-slate-500">{result.label}</p>
-                <p className={`mt-3 text-3xl font-semibold ${loading ? 'animate-pulse text-slate-400' : result.tone}`}>
-                  {result.value}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="fintech-card animate-slide-up">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-900">Outcome Chart</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  {loading
-                    ? 'Crunching scenarios and building projections...'
-                    : 'Best, worst, and average simulation values.'}
-                </p>
-              </div>
-              <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600">
-                Risk: {results.risk || '--'}
-              </div>
-            </div>
-
-            <div className="mt-6 h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" stroke="#64748b" />
-                  <YAxis stroke="#64748b" />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#4f46e5" radius={[12, 12, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+        <Field label="Amount (₹)" type="number" inputMode="decimal" min={1000} error={errors.amount?.message} {...register('amount')} />
+        <div>
+          <label className="label" htmlFor="horizon">Horizon</label>
+          <select id="horizon" className="input" {...register('horizonDays')}>
+            {HORIZONS.map(([d, l]) => <option key={d} value={d}>{l} ({d} days)</option>)}
+          </select>
         </div>
-      </div>
-    </section>
+        <div>
+          <label className="label" htmlFor="paths">Paths</label>
+          <select id="paths" className="input" {...register('paths')}>
+            {[500, 1000, 2000, 5000, 10000].map((p) => <option key={p} value={p}>{p.toLocaleString()}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="lookback">Calibration</label>
+          <select id="lookback" className="input" {...register('lookback')}>
+            <option value="1y">Last 1 year</option>
+            <option value="2y">Last 2 years</option>
+          </select>
+        </div>
+        <div className="flex items-end md:col-span-2 lg:col-span-6">
+          <button type="submit" className="btn-primary w-full sm:w-auto" disabled={state.loading}>
+            {state.loading ? <Spinner size={14} /> : <FlaskConical size={16} aria-hidden="true" />} Run simulation
+          </button>
+        </div>
+      </form>
+
+      {state.error && <div className="card"><ErrorState error={state.error} onRetry={() => run(state.lastPayload)} title="Simulation failed" /></div>}
+      {state.loading && !state.result && <div className="card"><SkeletonRows rows={6} className="h-12" /></div>}
+      {!state.loading && !state.result && !state.error && (
+        <div className="card">
+          <EmptyState icon={FlaskConical} title="Run your first simulation" message="Pick a stock and an amount. We’ll simulate thousands of possible futures from its real price behaviour." />
+        </div>
+      )}
+      {state.result && (
+        <div className={state.loading ? 'opacity-60' : ''}>
+          <Results r={state.result} rerunning={state.loading} onRerun={() => run({ ...state.lastPayload, seed: state.result.inputs.seed })} />
+        </div>
+      )}
+    </div>
   );
 }

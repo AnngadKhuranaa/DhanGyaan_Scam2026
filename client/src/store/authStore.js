@@ -1,33 +1,47 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import * as authService from '../services/authService';
+import { refreshSession, setAccessToken, setSessionExpiredHandler } from '../lib/api';
+import { authService } from '../services';
 
-export const useAuthStore = create(
-  persist(
-    (set, get) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
+/**
+ * Session state. Nothing is persisted to localStorage: on load we call
+ * /auth/refresh, and the httpOnly cookie decides whether we're logged in.
+ * status: 'loading' (checking cookie) | 'authenticated' | 'anonymous'
+ */
+export const useAuthStore = create((set) => {
+  const startSession = ({ user, accessToken }) => {
+    setAccessToken(accessToken);
+    set({ user, status: 'authenticated' });
+    return user;
+  };
+  const endSession = () => {
+    setAccessToken(null);
+    set({ user: null, status: 'anonymous' });
+  };
 
-      login: async (identifier, password) => {
-        const data = await authService.login(identifier, password);
-        set({ user: data.user, token: data.token, isAuthenticated: true });
-        return data;
-      },
+  setSessionExpiredHandler(endSession);
 
-      register: async (username, email, phone, password) => {
-        const data = await authService.register(username, email, phone, password);
-        set({ user: data.user, token: data.token, isAuthenticated: true });
-        return data;
-      },
+  return {
+    user: null,
+    status: 'loading',
 
-      logout: async () => {
-        try { await authService.logout(); } catch {}
-        set({ user: null, token: null, isAuthenticated: false });
-      },
-
-      setToken: (token) => set({ token }),
-    }),
-    { name: 'dhangyan-auth', partialize: (s) => ({ user: s.user, token: s.token, isAuthenticated: s.isAuthenticated }) }
-  )
-);
+    bootstrap: async () => {
+      try {
+        startSession(await refreshSession());
+      } catch {
+        endSession();
+      }
+    },
+    login: async (identifier, password) => startSession(await authService.login(identifier, password)),
+    register: async (payload) => startSession(await authService.register(payload)),
+    demoLogin: async () => startSession(await authService.demo()),
+    logout: async () => {
+      try {
+        await authService.logout();
+      } finally {
+        endSession();
+      }
+    },
+    /** Keep the cached cash balance in sync after a trade. */
+    setBalance: (balance) => set((s) => (s.user ? { user: { ...s.user, balance } } : s)),
+  };
+});

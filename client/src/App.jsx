@@ -1,84 +1,76 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import MainLayout from './layouts/MainLayout';
-import Landing from './pages/Landing';
-import Dashboard from './pages/Dashboard';
-import Insights from './pages/Insights';
-import Simulator from './pages/Simulator';
-import Portfolio from './pages/Portfolio';
-import Trading from './pages/Trading';
-import Leaderboard from './pages/Leaderboard';
-import ProtectedRoute from './components/common/ProtectedRoute';
+import { Suspense, lazy, useEffect } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { useAuthStore } from './store/authStore';
+import useUIStore from './store/useUIStore';
+import AppLayout from './components/layout/AppLayout';
+import { FullPageLoader } from './components/ui/PageSkeleton';
+
+// Route-level code splitting: each page is its own chunk, downloaded on first visit.
+const Landing = lazy(() => import('./pages/Landing'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Trade = lazy(() => import('./pages/Trade'));
+const Portfolio = lazy(() => import('./pages/Portfolio'));
+const Simulator = lazy(() => import('./pages/Simulator'));
+const Insights = lazy(() => import('./pages/Insights'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+
+/** Wait for the session check, then either render the app or send the user to the landing page. */
+function ProtectedRoute({ children }) {
+  const status = useAuthStore((s) => s.status);
+  const location = useLocation();
+  if (status === 'loading') return <FullPageLoader />;
+  if (status !== 'authenticated') return <Navigate to="/" replace state={{ from: location.pathname }} />;
+  return children;
+}
+
+function ThemeSync() {
+  const theme = useUIStore((s) => s.theme);
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+  return null;
+}
 
 export default function App() {
+  const bootstrap = useAuthStore((s) => s.bootstrap);
+  const theme = useUIStore((s) => s.theme);
+
+  useEffect(() => {
+    bootstrap();
+  }, [bootstrap]);
+
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Dashboard />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/insights"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Insights />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/simulator"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Simulator />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/portfolio"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Portfolio />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/trading"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Trading />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/leaderboard"
-          element={
-            <ProtectedRoute>
-              <MainLayout>
-                <Leaderboard />
-              </MainLayout>
-            </ProtectedRoute>
-          }
-        />
-        
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <ThemeSync />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: theme === 'dark' ? { background: '#1e293b', color: '#f1f5f9' } : undefined,
+        }}
+      />
+      <Suspense fallback={<FullPageLoader />}>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/trade" element={<Trade />} />
+            <Route path="/portfolio" element={<Portfolio />} />
+            <Route path="/simulator" element={<Simulator />} />
+            <Route path="/insights" element={<Insights />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

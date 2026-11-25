@@ -1,140 +1,128 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronLeft, ChevronRight, Trophy } from 'lucide-react';
+import { communityService, marketService } from '../services';
+import useAsync from '../hooks/useAsync';
+import useUIStore from '../store/useUIStore';
+import { formatCurrency } from '../utils/formatCurrency';
+import { fromNow } from '../utils/formatDate';
+import { EmptyState, ErrorState, SkeletonRows } from '../components/ui/States';
+import { PercentChange, SignedMoney } from '../components/ui/Values';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const PAGE_SIZE = 20;
 
-function MarketTable({ title, rows }) {
+function Row({ r }) {
   return (
-    <div className="fintech-card p-6">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
+    <tr className={r.isMe ? 'bg-brand-50/70 dark:bg-brand-900/30' : ''}>
+      <td className="tabular font-semibold">{r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : `#${r.rank}`}</td>
+      <td className="font-medium">
+        {r.username}
+        {r.isMe && <span className="badge-brand ml-2">you</span>}
+        {r.isDemo && <span className="badge-neutral ml-2">demo</span>}
+      </td>
+      <td className="text-right"><PercentChange value={r.totalReturnPercent} /></td>
+      <td className="text-right"><SignedMoney value={r.totalPnL} /></td>
+      <td className="tabular hidden text-right sm:table-cell">{formatCurrency(r.totalValue, 'INR', 0)}</td>
+      <td className="tabular muted hidden text-right md:table-cell">{r.holdingsCount}</td>
+    </tr>
+  );
+}
 
-      <div className="table-shell mt-4">
-        <div className="table-head grid grid-cols-4 px-4 py-3">
-          <span>Stock</span>
-          <span>Name</span>
-          <span>Price</span>
-          <span>% Change</span>
-        </div>
+function Traders() {
+  const [page, setPage] = useState(1);
+  const { data, error, loading, reload } = useAsync(() => communityService.leaderboard(page, PAGE_SIZE), [page], { keepPreviousData: true });
 
-        <div className="divide-y divide-slate-200">
-          {rows.map((row) => (
-            <div key={row.symbol} className="table-row grid grid-cols-4 px-4 py-3">
-              <span>{row.symbol}</span>
-              <span>{row.name}</span>
-              <span>Rs {row.price}</span>
-              <span className={row.changePercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                {row.changePercent}%
+  if (loading && !data) return <SkeletonRows rows={8} className="h-10" />;
+  if (error && !data) return <ErrorState error={error} onRetry={reload} />;
+  if (data.total === 0) return <EmptyState icon={Trophy} title="No traders yet" action={<Link to="/trade" className="btn-primary">Be the first</Link>} />;
+
+  const meOffPage = data.me && !data.items.some((r) => r.isMe);
+  return (
+    <div>
+      <p className="muted mb-3 text-xs">Ranked by return on starting balance at live prices · {data.total} traders · updated {fromNow(data.asOf)}</p>
+      <div className={`-mx-2 overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
+        <table className="table-base">
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Trader</th>
+              <th scope="col" className="text-right">Return</th>
+              <th scope="col" className="text-right">P&L</th>
+              <th scope="col" className="hidden text-right sm:table-cell">Portfolio value</th>
+              <th scope="col" className="hidden text-right md:table-cell">Holdings</th>
+            </tr>
+          </thead>
+          <tbody>
+            {meOffPage && <Row r={data.me} />}
+            {data.items.map((r) => <Row key={r.rank} r={r} />)}
+          </tbody>
+        </table>
+      </div>
+      <nav className="mt-4 flex items-center justify-between text-sm" aria-label="Leaderboard pages">
+        <span className="muted">Page {data.page} of {data.totalPages}</span>
+        <span className="flex gap-2">
+          <button type="button" className="btn-secondary px-3" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} aria-label="Previous page"><ChevronLeft size={16} /></button>
+          <button type="button" className="btn-secondary px-3" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)} aria-label="Next page"><ChevronRight size={16} /></button>
+        </span>
+      </nav>
+    </div>
+  );
+}
+
+function MoverList({ title, rows, onOpen }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+        {rows.map((q) => (
+          <li key={q.symbol}>
+            <button type="button" onClick={() => onOpen(q.symbol)} className="flex w-full items-center justify-between gap-2 py-2 text-left text-sm">
+              <span className="min-w-0 truncate font-medium">{q.symbol.replace('.NS', '')}</span>
+              <span className="flex items-center gap-3">
+                <span className="tabular muted">{formatCurrency(q.price, q.currency)}</span>
+                <PercentChange value={q.changePercent} className="w-20 justify-end" />
               </span>
-            </div>
-          ))}
-        </div>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Movers() {
+  const market = useUIStore((s) => s.market);
+  const openDetail = useUIStore((s) => s.openDetail);
+  const { data, error, loading, reload } = useAsync(() => marketService.movers(market), [market]);
+  if (loading) return <SkeletonRows rows={6} className="h-10" />;
+  if (error) return <ErrorState error={error} onRetry={reload} />;
+
+  return (
+    <div>
+      <p className="muted mb-4 text-xs">From {data.universe} · switch NSE/US in the top bar</p>
+      <div className="grid gap-6 md:grid-cols-3">
+        <MoverList title="Top gainers" rows={data.gainers} onOpen={openDetail} />
+        <MoverList title="Top losers" rows={data.losers} onOpen={openDetail} />
+        <MoverList title="Most active" rows={data.mostActive} onOpen={openDetail} />
       </div>
     </div>
   );
 }
 
 export default function Leaderboard() {
-  const [marketData, setMarketData] = useState(null);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    async function loadLeaderboard() {
-      setLoading(true);
-      setError('');
-
-      try {
-        const [marketResponse, leaderboardResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/market/top`),
-          fetch(`${API_BASE_URL}/leaderboard`),
-        ]);
-
-        const [marketText, leaderboardText] = await Promise.all([
-          marketResponse.text(),
-          leaderboardResponse.text(),
-        ]);
-
-        console.log("RAW RESPONSE:", marketText, leaderboardText);
-
-        let marketJson, leaderboardJson;
-        try {
-          marketJson = JSON.parse(marketText);
-          leaderboardJson = JSON.parse(leaderboardText);
-        } catch {
-          throw new Error("Server returned HTML instead of JSON");
-        }
-
-        if (!marketResponse.ok) {
-          throw new Error(marketJson.message || 'Failed to load market tables');
-        }
-
-        if (!leaderboardResponse.ok) {
-          throw new Error(leaderboardJson.message || 'Failed to load leaderboard');
-        }
-
-        setMarketData(marketJson);
-        setLeaderboard(Array.isArray(leaderboardJson) ? leaderboardJson : []);
-      } catch (requestError) {
-        setError(requestError.message || 'Something went wrong');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadLeaderboard();
-  }, []);
-
+  const [tab, setTab] = useState('traders');
   return (
-    <section className="space-y-8">
-      <div className="section-header">
-        <h1 className="section-title">Leaderboard</h1>
-        <p className="section-copy">
-          Track top market movers and compare paper-trading performance across portfolios.
-        </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="page-title">Leaderboard</h1>
+        <p className="page-subtitle">See how your paper returns compare, and what’s moving in the market today.</p>
       </div>
-
-      {error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-500">
-          {error}
-        </div>
-      ) : null}
-
-      <div className="fintech-card">
-        <h2 className="text-2xl font-semibold text-slate-900">Portfolio Leaderboard</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Ranked by highest portfolio return percentage.
-        </p>
-
-        <div className="table-shell mt-6">
-          <div className="table-head grid grid-cols-4 px-4 py-3">
-            <span>User</span>
-            <span>Return %</span>
-            <span>Total PnL</span>
-            <span>Portfolio Value</span>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {leaderboard.map((entry) => (
-              <div key={entry.userId} className="table-row grid grid-cols-4 px-4 py-3">
-                <span>{entry.email}</span>
-                <span className={entry.totalReturnPercent >= 0 ? 'text-emerald-500' : 'text-rose-500'}>
-                  {entry.totalReturnPercent}%
-                </span>
-                <span>Rs {entry.totalPnL}</span>
-                <span>Rs {entry.portfolioValue}</span>
-              </div>
-            ))}
-            {!loading && leaderboard.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-slate-500">No leaderboard data available yet.</div>
-            ) : null}
-          </div>
-        </div>
+      <div className="tab-list" role="tablist" aria-label="Leaderboard views">
+        {[['traders', 'Top traders'], ['movers', 'Market movers']].map(([k, l]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`tab ${tab === k ? 'tab-active' : ''}`}>{l}</button>
+        ))}
       </div>
-
-      <div className="grid gap-6">
-        <MarketTable title="Top Gainers" rows={marketData?.topGainers || []} />
-        <MarketTable title="Top Losers" rows={marketData?.topLosers || []} />
-        <MarketTable title="Most Traded" rows={marketData?.mostTraded || []} />
-      </div>
-    </section>
+      <section className="card" role="tabpanel">{tab === 'traders' ? <Traders /> : <Movers />}</section>
+    </div>
   );
 }

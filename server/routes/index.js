@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import authRoutes from './auth.routes.js';
 import marketRoutes from './market.routes.js';
-import sentimentRoutes from './sentiment.routes.js';
+import insightsRoutes from './insights.routes.js';
 import portfolioRoutes from './portfolio.routes.js';
 import leaderboardRoutes from './leaderboard.routes.js';
 import tradeRoutes from './trade.routes.js';
@@ -13,7 +13,7 @@ const router = Router();
 
 router.use('/auth', authRoutes);
 router.use('/market', marketRoutes);
-router.use('/sentiment', sentimentRoutes);
+router.use('/insights', insightsRoutes);
 router.use('/portfolio', portfolioRoutes);
 router.use('/leaderboard', leaderboardRoutes);
 router.use('/trades', tradeRoutes);

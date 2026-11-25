@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import toast from 'react-hot-toast';
 import { refreshSession, setAccessToken, setSessionExpiredHandler } from '../lib/api';
 import { authService } from '../services';
 
@@ -27,7 +28,12 @@ export const useAuthStore = create((set) => {
     bootstrap: async () => {
       try {
         startSession(await refreshSession());
-      } catch {
+      } catch (error) {
+        // No/expired cookie (401) -> anonymous. Other failures (server down, 429) also
+        // leave us anonymous, but say why so the user isn't silently logged out.
+        if (error.response && error.response.status !== 401) {
+          toast.error('Could not restore your session. Please log in again.');
+        }
         endSession();
       }
     },

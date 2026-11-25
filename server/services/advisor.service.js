@@ -16,11 +16,23 @@ Rules:
 - Use ₹ for INR amounts and $ for USD. Keep answers under 220 words, short paragraphs or bullet points, no tables.
 - Do not add a disclaimer; the app shows one.`;
 
+/** Portfolio-level lines so general questions ("how am I doing?") have real data too. */
+function portfolioLines(p) {
+  const top = p.holdings.slice(0, 5).map((h) => `${h.symbol} ${h.allocationPercent}% (P&L ${h.unrealizedPnLPercent}%)`);
+  return [
+    `USER PORTFOLIO: value ₹${p.totalValue} (${p.totalReturnPercent}% since start), cash ₹${p.cash}, ${p.holdings.length} holdings.`,
+    top.length ? `Largest holdings: ${top.join('; ')}.` : 'No holdings yet.',
+  ];
+}
+
 /** Gather the real numbers the model is allowed to use. */
 async function buildStockContext(userId, symbol) {
   const lines = [];
   const meta = { symbol: null, hasPosition: false, sentimentDemo: null };
-  if (!symbol) return { text: 'No specific stock selected.', meta, confidence: null };
+  if (!symbol) {
+    const portfolio = await getPortfolioSummary(userId);
+    return { text: ['No specific stock selected.', ...portfolioLines(portfolio)].join('\n'), meta, confidence: null };
+  }
 
   const [quote, confidence, portfolio] = await Promise.all([
     getQuote(symbol),
@@ -54,14 +66,20 @@ async function buildStockContext(userId, symbol) {
   } else {
     lines.push('USER POSITION: none in this stock.');
   }
-  lines.push(`USER CASH: ₹${portfolio.cash}. Total paper portfolio value ₹${portfolio.totalValue} (${portfolio.totalReturnPercent}% since start).`);
+  lines.push(...portfolioLines(portfolio));
 
   return { text: lines.join('\n'), meta, confidence };
 }
 
 function ruleBasedStockAnswer(contextText, confidence) {
   if (!confidence) {
-    return `AI is not configured on this server, so here is the raw data instead:\n\n${contextText}`;
+    return [
+      'The AI tutor needs GEMINI_API_KEY or OPENAI_API_KEY on the server, so I can only show computed data.',
+      '',
+      contextText.replace('No specific stock selected.\n', ''),
+      '',
+      'Pick a stock above to see its trend, momentum, volatility and sentiment scores, or use Portfolio → “Explain my portfolio”.',
+    ].join('\n');
   }
   const strongest = [...confidence.components].filter((c) => c.included).sort((a, b) => b.score - a.score);
   return [

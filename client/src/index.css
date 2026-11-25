@@ -6,14 +6,16 @@
 
 @layer base {
   html {
-    @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
     color-scheme: light;
   }
   html.dark {
     color-scheme: dark;
+    background-color: theme('colors.slate.950');
   }
+  /* Base colours live on <body>, not <html>: Tailwind's class-based `dark:` variant
+     compiles to a descendant selector (.dark *), which never matches <html> itself. */
   body {
-    @apply min-h-screen font-sans;
+    @apply min-h-screen bg-slate-50 font-sans text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
   }
   h1, h2, h3 {
     @apply font-display tracking-tight;
@@ -31,8 +33,10 @@
 }
 
 @layer components {
+  /* min-w-0: cards are grid/flex children; without it a wide table inside stretches the
+     column past the viewport instead of scrolling inside its overflow-x-auto wrapper. */
   .card {
-    @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none;
+    @apply min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-card dark:border-slate-800 dark:bg-slate-900 dark:shadow-none;
   }
   .card-title {
     @apply text-base font-semibold text-slate-900 dark:text-slate-100;

@@ -4,10 +4,15 @@ const isTest = process.env.NODE_ENV === 'test';
 
 const limitMessage = (message) => ({ success: false, data: null, message });
 
-/** General limit for the whole API. */
+/**
+ * General limit for the whole API: ~1 request/second sustained per IP. One
+ * dashboard view makes ~10 requests (movers, indices, sparklines...), so a
+ * lower cap throttles normal browsing. Upstream Yahoo calls are protected
+ * separately by the server-side cache.
+ */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: isTest ? 10_000 : 300,
+  limit: isTest ? 10_000 : 1000,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: limitMessage('Too many requests, please slow down and try again shortly.'),

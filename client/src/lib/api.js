@@ -61,9 +61,13 @@ api.interceptors.response.use(
       try {
         await refreshSession();
         return api(original);
-      } catch {
-        setAccessToken(null);
-        onSessionExpired();
+      } catch (refreshError) {
+        // Only a 401 means the session is really over. A 429 or network blip
+        // shouldn't log the user out.
+        if (refreshError.response?.status === 401) {
+          setAccessToken(null);
+          onSessionExpired();
+        }
       }
     }
     return Promise.reject(error);

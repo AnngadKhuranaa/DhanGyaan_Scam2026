@@ -49,6 +49,8 @@ export function formatCompact(value, currency = 'INR') {
   const abs = Math.abs(value);
   const sign = value < 0 ? '−' : '';
   if (currency === 'INR') {
+    // Large-cap market caps are quoted in lakh crore (1 L Cr = 1e12), e.g. ₹4.62L Cr.
+    if (abs >= 1e12) return `${sign}${symbol}${(abs / 1e12).toFixed(2)}L Cr`;
     if (abs >= 1e7) return `${sign}${symbol}${(abs / 1e7).toFixed(2)}Cr`;
     if (abs >= 1e5) return `${sign}${symbol}${(abs / 1e5).toFixed(2)}L`;
   } else {

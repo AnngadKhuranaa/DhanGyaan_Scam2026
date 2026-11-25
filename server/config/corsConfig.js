@@ -1,6 +1,18 @@
-export const corsOptions = {
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-};
+/**
+ * Only origins listed in CLIENT_URL may call the API from a browser.
+ * `credentials: true` is needed so the httpOnly refresh-token cookie is sent.
+ */
+export function buildCorsOptions(allowedOrigins) {
+  return {
+    origin(origin, callback) {
+      // Non-browser clients (curl, health checks, server-to-server) send no Origin.
+      if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  };
+}

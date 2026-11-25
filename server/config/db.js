@@ -1,15 +1,13 @@
 import mongoose from 'mongoose';
+import logger from '../utils/logger.js';
 
-export async function connectDB() {
-  try {
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI is not defined');
-    }
+/** Connect to MongoDB. Paper trading uses transactions, so this must be a replica set (Atlas is). */
+export async function connectDB(uri) {
+  mongoose.set('strictQuery', true);
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 10_000 });
+  logger.info(`MongoDB connected (${mongoose.connection.host}/${mongoose.connection.name})`);
+}
 
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('MongoDB connected');
-  } catch (error) {
-    console.error(`MongoDB connection failed: ${error.message}`);
-    throw error;
-  }
+export async function disconnectDB() {
+  await mongoose.disconnect();
 }

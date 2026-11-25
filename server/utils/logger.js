@@ -2,23 +2,25 @@ import winston from 'winston';
 
 const { combine, timestamp, printf, colorize, errors } = winston.format;
 
-const logFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} [${level}]: ${stack || message}`;
-});
+const level =
+  process.env.LOG_LEVEL ||
+  (process.env.NODE_ENV === 'production' ? 'http' : process.env.NODE_ENV === 'test' ? 'error' : 'debug');
 
+// Console only: hosts like Render/Railway capture stdout, and their disks are ephemeral.
 const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'warn' : 'debug',
+  level,
   format: combine(
     colorize(),
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     errors({ stack: true }),
-    logFormat
+    printf(({ level: lvl, message, timestamp: ts, stack }) => `${ts} [${lvl}]: ${stack || message}`)
   ),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'logs/combined.log' }),
-  ],
+  transports: [new winston.transports.Console()],
 });
+
+/** Stream adapter so morgan's HTTP access logs go through winston. */
+export const httpLogStream = {
+  write: (line) => logger.http(line.trim()),
+};
 
 export default logger;

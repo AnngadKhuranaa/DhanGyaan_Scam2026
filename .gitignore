@@ -45,3 +45,5 @@ temp/
 # Misc
 *.swp
 *.swo
+# Local dev database (npm run dev:db)
+server/.mongo-data/

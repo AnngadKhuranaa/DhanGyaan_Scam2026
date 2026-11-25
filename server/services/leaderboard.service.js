@@ -1,50 +1,65 @@
 import Portfolio from '../models/Portfolio.js';
 import User from '../models/User.js';
-import { getStockData } from './stock.service.js';
+import { cached } from '../utils/cache.js';
+import { round } from '../utils/stats.js';
+import { priceHoldings, valueHolding } from './portfolio.service.js';
 
-export async function getLeaderboardData() {
-  const portfolios = await Portfolio.find({});
+const LEADERBOARD_TTL_SECONDS = 60;
 
-  const leaderboard = await Promise.all(
-    portfolios.map(async (portfolio) => {
-      const user = await User.findById(portfolio.userId);
+/**
+ * Rank every trader by % return on their starting balance, using live prices.
+ * All held symbols across all users are priced in ONE batched quote request,
+ * and the ranked list is cached for 60s. (At real scale you'd snapshot this
+ * on a schedule instead of computing on read.)
+ */
+async function computeRanking() {
+  const [users, portfolios] = await Promise.all([
+    User.find({}, 'username balance startingBalance isDemo').lean(),
+    Portfolio.find({}, 'userId holdings realizedPnL').lean(),
+  ]);
+  const portfolioByUser = new Map(portfolios.map((p) => [p.userId.toString(), p]));
 
-      if (!user) {
-        return null;
-      }
+  // Price each distinct symbol once.
+  const distinct = new Map();
+  for (const p of portfolios) for (const h of p.holdings) distinct.set(h.symbol, h);
+  const { quotes, fx } = await priceHoldings([...distinct.values()]);
 
-      const holdings = await Promise.all(
-        portfolio.stocks.map(async (holding) => {
-          const stockData = await getStockData(holding.name);
-          const currentPrice = Number(stockData.price ?? 0);
-          const marketValue = currentPrice * holding.quantity;
-          const investedValue = holding.avgPrice * holding.quantity;
+  const rows = users.map((u) => {
+    const holdings = portfolioByUser.get(u._id.toString())?.holdings || [];
+    const holdingsValue = holdings.reduce(
+      (sum, h) => sum + valueHolding(h, quotes.get(h.symbol), fx.get(h.currency)).marketValueInr,
+      0
+    );
+    const totalValue = u.balance + holdingsValue;
+    return {
+      userId: u._id.toString(),
+      username: u.username,
+      isDemo: Boolean(u.isDemo),
+      holdingsCount: holdings.length,
+      totalValue: round(totalValue),
+      totalPnL: round(totalValue - u.startingBalance),
+      totalReturnPercent: u.startingBalance > 0 ? round(((totalValue - u.startingBalance) / u.startingBalance) * 100) : 0,
+    };
+  });
 
-          return {
-            marketValue,
-            investedValue,
-          };
-        })
-      );
+  rows.sort((a, b) => b.totalReturnPercent - a.totalReturnPercent || b.totalValue - a.totalValue);
+  return rows.map((row, i) => ({ rank: i + 1, ...row }));
+}
 
-      const investedValue = holdings.reduce((sum, item) => sum + item.investedValue, 0);
-      const currentValue = holdings.reduce((sum, item) => sum + item.marketValue, 0);
-      const totalPnL = portfolio.realizedPnL + (currentValue - investedValue);
-      const totalReturnPercent =
-        investedValue > 0 ? (totalPnL / investedValue) * 100 : 0;
+export async function getLeaderboard({ page = 1, limit = 20, currentUserId } = {}) {
+  const ranking = await cached('leaderboard', LEADERBOARD_TTL_SECONDS, computeRanking);
+  const me = currentUserId ? ranking.find((r) => r.userId === currentUserId.toString()) : null;
 
-      return {
-        userId: user._id,
-        email: user.email,
-        totalReturnPercent: Number(totalReturnPercent.toFixed(2)),
-        totalPnL: Number(totalPnL.toFixed(2)),
-        portfolioValue: Number((user.balance + currentValue).toFixed(2)),
-      };
-    })
-  );
+  // userId is used only to flag "you"; it is not exposed to other users.
+  const strip = ({ userId, ...row }) => ({ ...row, isMe: Boolean(me && userId === me.userId) });
 
-  return leaderboard
-    .filter(Boolean)
-    .sort((a, b) => b.totalReturnPercent - a.totalReturnPercent)
-    .slice(0, 10);
+  return {
+    items: ranking.slice((page - 1) * limit, page * limit).map(strip),
+    page,
+    limit,
+    total: ranking.length,
+    totalPages: Math.max(1, Math.ceil(ranking.length / limit)),
+    me: me ? strip(me) : null,
+    asOf: new Date().toISOString(),
+  };
 }

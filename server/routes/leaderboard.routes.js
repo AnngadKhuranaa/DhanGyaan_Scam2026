@@ -1,18 +1,12 @@
-import express from 'express';
-import { getLeaderboardData } from '../services/leaderboard.service.js';
+import { Router } from 'express';
+import * as controller from '../controllers/community.controller.js';
+import { protect } from '../middleware/auth.middleware.js';
+import { validate } from '../middleware/validate.js';
+import { asyncHandler } from '../utils/http.js';
+import { pagination } from '../validators/common.validators.js';
 
-const router = express.Router();
+const router = Router();
 
-router.get('/', async (req, res) => {
-  try {
-    const data = await getLeaderboardData();
-    return res.json(data);
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-});
+router.get('/', protect, validate(pagination), asyncHandler(controller.leaderboard));
 
 export default router;

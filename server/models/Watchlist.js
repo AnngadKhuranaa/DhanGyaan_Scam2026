@@ -1,12 +1,15 @@
 import mongoose from 'mongoose';
 
+export const WATCHLIST_LIMIT = 30;
+
 const watchlistSchema = new mongoose.Schema(
   {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-    symbols: [
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    items: [
       {
-        symbol: { type: String, uppercase: true },
-        companyName: { type: String },
+        _id: false,
+        symbol: { type: String, uppercase: true, required: true },
+        name: { type: String, default: '' },
         addedAt: { type: Date, default: Date.now },
       },
     ],

@@ -8,6 +8,7 @@ import leaderboardRoutes from './leaderboard.routes.js';
 import tradeRoutes from './trade.routes.js';
 import riskRoutes from './risk.routes.js';
 import aiRoutes from './ai.routes.js';
+import watchlistRoutes from './watchlist.routes.js';
 
 const router = Router();
 
@@ -20,5 +21,6 @@ router.use('/leaderboard', leaderboardRoutes);
 router.use('/trades', tradeRoutes);
 router.use('/risk', riskRoutes);
 router.use('/ai', aiRoutes);
+router.use('/watchlist', watchlistRoutes);
 
 export default router;

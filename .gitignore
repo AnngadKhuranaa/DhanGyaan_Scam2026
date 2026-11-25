@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment
+.env
+.env.local
+.env.*.local
+server/.env
+client/.env
+
+# Build outputs
+dist/
+build/
+.vite/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Testing
+coverage/
+
+# Database
+*.db
+*.sqlite
+
+# Temp files
+tmp/
+temp/
+
+# Misc
+*.swp
+*.swo

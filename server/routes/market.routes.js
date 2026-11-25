@@ -1,41 +1,33 @@
-import express from 'express';
-import { getTopMarketData } from '../services/market.service.js';
+import { Router } from 'express';
+import { query } from 'express-validator';
+import * as controller from '../controllers/market.controller.js';
+import { validate } from '../middleware/validate.js';
+import { asyncHandler } from '../utils/http.js';
+import { marketQuery, rangeQuery, symbolParam } from '../validators/common.validators.js';
 
-const router = express.Router();
+const router = Router();
 
-router.get('/top', async (req, res) => {
-  console.log('Market API hit');
-
-  try {
-    const data = await getTopMarketData();
-
-    return res.json({
-      topGainers: data.topGainers || [],
-      topLosers: data.topLosers || [],
-      mostTraded: data.mostTraded || [],
-      gainers: data.topGainers || [],
-      losers: data.topLosers || [],
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-      topGainers: [],
-      topLosers: [],
-      mostTraded: [],
-      gainers: [],
-      losers: [],
-    });
-  }
-});
-
-router.get('/pulse', async (req, res) => {
-  return res.json({
-    pulse: [
-      { symbol: 'NIFTY 50', changePercent: Number((Math.random() * 1.5 - 0.5).toFixed(2)) },
-      { symbol: 'BANKNIFTY', changePercent: Number((Math.random() * 2.0 - 0.7).toFixed(2)) }
-    ]
-  });
-});
+router.get(
+  '/search',
+  validate([
+    query('q').isString().trim().isLength({ min: 1, max: 50 }).withMessage('q must be 1-50 characters'),
+    marketQuery,
+  ]),
+  asyncHandler(controller.search)
+);
+router.get(
+  '/quotes',
+  validate([
+    query('symbols')
+      .isString()
+      .custom((v) => v.split(',').filter(Boolean).length <= 25)
+      .withMessage('symbols must be a comma-separated list of at most 25 tickers'),
+  ]),
+  asyncHandler(controller.quotes)
+);
+router.get('/quote/:symbol', validate([symbolParam]), asyncHandler(controller.quote));
+router.get('/history/:symbol', validate([symbolParam, rangeQuery]), asyncHandler(controller.history));
+router.get('/movers', validate([marketQuery]), asyncHandler(controller.movers));
+router.get('/indices', validate([marketQuery]), asyncHandler(controller.indices));
 
 export default router;

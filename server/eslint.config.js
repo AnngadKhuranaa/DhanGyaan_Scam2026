@@ -12,8 +12,10 @@ export default [
       globals: { ...globals.node, ...globals.jest },
     },
     rules: {
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
       'no-console': ['warn', { allow: ['error'] }],
     },
   },
+  // CLI scripts print to the terminal on purpose.
+  { files: ['scripts/**/*.js'], rules: { 'no-console': 'off' } },
 ];

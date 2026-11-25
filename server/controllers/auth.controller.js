@@ -1,68 +1,54 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
-import Portfolio from '../models/Portfolio.js';
+import * as authService from '../services/auth.service.js';
+import { env } from '../config/env.js';
+import { sendSuccess } from '../utils/http.js';
 
-const signToken = (id, username, email) =>
-  jwt.sign({ id, username, email }, process.env.JWT_SECRET || 'fallback_secret', { expiresIn: '7d' });
+const COOKIE_NAME = 'refreshToken';
 
-export const register = async (req, res, next) => {
-  try {
-    const { username, email, phone, password } = req.body;
-    if (!username || !email || !phone || !password)
-      return res.status(400).json({ success: false, message: 'All fields required' });
+/**
+ * httpOnly: JS can't read it. path: only sent to /api/auth/*.
+ * In production the client (Vercel) and API (Render) are different sites, so the
+ * cookie must be SameSite=None; Secure to be sent on cross-site XHR.
+ */
+function cookieOptions() {
+  const { isProduction, refreshTokenTtlDays } = env();
+  return {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'none' : 'lax',
+    path: '/api/auth',
+    maxAge: refreshTokenTtlDays * 24 * 60 * 60 * 1000,
+  };
+}
 
-    const existingUser = await User.findOne({
-      $or: [{ username }, { email }, { phone }]
-    });
+function sendSession(res, { user, accessToken, refreshToken }, message, status = 200) {
+  res.cookie(COOKIE_NAME, refreshToken, cookieOptions());
+  return sendSuccess(res, { user: user.toPublic(), accessToken }, message, status);
+}
 
-    if (existingUser) {
-      return res.status(409).json({ success: false, message: 'User already exists with that email, username, or phone.' });
-    }
+export async function register(req, res) {
+  const session = await authService.register(req.body);
+  sendSession(res, session, 'Account created', 201);
+}
 
-    const user = await User.create({ username, email, phone, password });
-    
-    // Bootstrap empty portfolio (assuming paperBalance or default balance exists)
-    await Portfolio.create({ user: user._id, cashBalance: user.balance || 100000 });
+export async function login(req, res) {
+  sendSession(res, await authService.login(req.body), 'Logged in');
+}
 
-    const token = signToken(user._id, user.username, user.email);
+export async function demo(req, res) {
+  sendSession(res, await authService.demoLogin(), 'Logged in to the demo account');
+}
 
-    res.status(201).json({ 
-      success: true, 
-      token, 
-      user: { id: user._id, username: user.username, email: user.email, phone: user.phone } 
-    });
-  } catch (err) { next(err); }
-};
+export async function refresh(req, res) {
+  sendSession(res, await authService.refresh(req.cookies?.[COOKIE_NAME]), 'Token refreshed');
+}
 
-export const login = async (req, res, next) => {
-  try {
-    const { identifier, password } = req.body;
-    if (!identifier || !password)
-      return res.status(400).json({ success: false, message: 'Identifier and password required' });
+export async function logout(req, res) {
+  await authService.logout(authService.userIdFromRefreshToken(req.cookies?.[COOKIE_NAME]));
+  const { maxAge: _maxAge, ...clearOptions } = cookieOptions();
+  res.clearCookie(COOKIE_NAME, clearOptions);
+  sendSuccess(res, null, 'Logged out');
+}
 
-    const user = await User.findOne({
-      $or: [{ email: identifier }, { username: identifier }, { phone: identifier }]
-    }).select('+password');
-
-    if (!user || !(await user.comparePassword(password)))
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
-
-    const token = signToken(user._id, user.username, user.email);
-
-    res.json({ 
-      success: true, 
-      token, 
-      user: { id: user._id, username: user.username, email: user.email, phone: user.phone } 
-    });
-  } catch (err) { next(err); }
-};
-
-export const logout = async (req, res, next) => {
-  try {
-    res.json({ success: true, message: 'Logged out successfully' });
-  } catch (err) { next(err); }
-};
-
-export const getMe = async (req, res) => {
-  res.json({ success: true, user: req.user });
-};
+export async function me(req, res) {
+  sendSuccess(res, { user: req.user.toPublic() });
+}

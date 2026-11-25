@@ -1,26 +1,25 @@
-import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import ApiError from '../utils/ApiError.js';
+import { verifyAccessToken } from '../services/auth.service.js';
 
-export const protect = async (req, res, next) => {
-  let token;
-  if (req.headers.authorization?.startsWith('Bearer')) {
-    token = req.headers.authorization.split(' ')[1];
-  }
-  if (!token) return res.status(401).json({ success: false, message: 'Not authenticated' });
-
+/**
+ * Require a valid access token. On success req.user is the logged-in user.
+ * Every user-scoped query must use req.user._id, never an id from the request,
+ * so one user can never read or trade on another user's account.
+ */
+export async function protect(req, res, next) {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-password');
-    if (!req.user) return res.status(401).json({ success: false, message: 'User not found' });
-    next();
-  } catch {
-    res.status(401).json({ success: false, message: 'Token invalid or expired' });
-  }
-};
+    const header = req.headers.authorization || '';
+    const [scheme, token] = header.split(' ');
+    if (scheme !== 'Bearer' || !token) throw ApiError.unauthorized('Not authenticated');
 
-export const adminOnly = (req, res, next) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, message: 'Admin access required' });
+    const userId = verifyAccessToken(token);
+    const user = await User.findById(userId);
+    if (!user) throw ApiError.unauthorized('User no longer exists');
+
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
-};
+}

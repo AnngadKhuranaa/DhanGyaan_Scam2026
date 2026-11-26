@@ -22,15 +22,17 @@ const formatInr = (n) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits
  *    conflict and `connection.transaction()` retries the whole callback with
  *    fresh reads, so the average-cost maths always starts from committed data.
  */
-export async function executeTrade({ userId, symbol, side, quantity }) {
+export async function executeTrade({ userId, symbol, side, quantity, fill }) {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw ApiError.badRequest('Quantity must be a whole number greater than 0');
   }
 
   // Network calls happen BEFORE the transaction so it stays short.
   const quote = await getQuote(symbol); // 404 for unknown symbols
-  const fxRate = await getFxRateToInr(quote.currency);
-  const price = quote.price;
+  // `fill` is INTERNAL ONLY (used by the seed script to backfill historical trades at
+  // real past closes). No route passes it, so API clients can never set a price.
+  const fxRate = fill?.fxRate ?? (await getFxRateToInr(quote.currency));
+  const price = fill?.price ?? quote.price;
   const priceInr = price * fxRate;
   const amountInr = round(priceInr * quantity, 2);
 
@@ -106,6 +108,7 @@ export async function executeTrade({ userId, symbol, side, quantity }) {
           amountInr,
           realizedPnL,
           balanceAfter: round(user.balance, 2),
+          ...(fill?.at && { createdAt: fill.at, updatedAt: fill.at }),
         },
       ],
       { session }

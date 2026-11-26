@@ -180,12 +180,12 @@ npm install
 cp .env.example .env            # set JWT_SECRET and JWT_REFRESH_SECRET (two different random strings)
 npm run dev:db                  # terminal A: local MongoDB replica set (skip if MONGO_URI points to Atlas)
 npm run seed                    # optional: demo account with real historical trades
-npm run dev                     # terminal B: http://localhost:5000  (check /api/health)
+npm run dev                     # terminal B: http://localhost:5001  (check /api/health)
 
 # 2. Web app
 cd ../client
 npm install
-cp .env.example .env            # VITE_API_BASE_URL=http://localhost:5000/api
+cp .env.example .env            # VITE_API_BASE_URL=http://localhost:5001/api
 npm run dev                     # http://localhost:5173, then click "Try the demo"
 ```
 
@@ -202,7 +202,7 @@ npm run dev                     # http://localhost:5173, then click "Try the dem
 | `JWT_SECRET` | ✅ | – | Signs 15-min access tokens |
 | `JWT_REFRESH_SECRET` | ✅ | – | Signs 7-day refresh tokens (must differ from `JWT_SECRET`) |
 | `CLIENT_URL` | | `http://localhost:5173` | Comma-separated CORS whitelist (also governs cookies) |
-| `PORT` | | `5000` | HTTP port |
+| `PORT` | | `5001` | HTTP port (not 5000: macOS AirPlay Receiver uses it) |
 | `NODE_ENV` | | `development` | `production` enables `Secure; SameSite=None` cookies |
 | `NEWS_API_KEY` | | – | NewsAPI key; without it sentiment shows labelled demo headlines |
 | `GEMINI_API_KEY` / `GEMINI_MODEL` | | – / `gemini-2.5-flash` | Primary AI provider |

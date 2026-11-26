@@ -29,7 +29,7 @@ export function loadEnv(source = process.env) {
     nodeEnv,
     isProduction: nodeEnv === 'production',
     isTest: nodeEnv === 'test',
-    port: Number(source.PORT) || 5000,
+    port: Number(source.PORT) || 5001,
     mongoUri: source.MONGO_URI,
     jwtSecret: source.JWT_SECRET,
     jwtRefreshSecret: source.JWT_REFRESH_SECRET,

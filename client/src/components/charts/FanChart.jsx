@@ -21,6 +21,13 @@ export default function FanChart({ fan, amount, currency }) {
     p95: f.p95,
   }));
 
+  // Fit the y-axis to the bands (the invisible stacked base would otherwise pull it down to 0).
+  const lo = Math.min(amount, ...fan.map((f) => f.p5));
+  const hi = Math.max(amount, ...fan.map((f) => f.p95));
+  const pad = (hi - lo) * 0.06;
+  const yDomain = [Math.max(0, lo - pad), hi + pad];
+  const lastDay = fan[fan.length - 1].day;
+
   const renderTooltip = ({ active, payload }) => {
     if (!active || !payload?.length) return null;
     const d = payload[0].payload;
@@ -41,10 +48,10 @@ export default function FanChart({ fan, amount, currency }) {
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 4, left: 4 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-slate-200 dark:stroke-slate-800" />
-          <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#94a3b8" label={{ value: 'Trading days', position: 'insideBottom', offset: -2, fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" width={70} tickFormatter={(v) => formatCompact(v, currency)} domain={['auto', 'auto']} />
+          <XAxis dataKey="day" type="number" domain={[0, lastDay]} tickCount={8} allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94a3b8" label={{ value: 'Trading days', position: 'insideBottom', offset: -2, fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" width={70} tickFormatter={(v) => formatCompact(v, currency)} domain={yDomain} allowDataOverflow />
           <Tooltip content={renderTooltip} />
-          <Area dataKey="base" stackId="fan" stroke="none" fill="transparent" isAnimationActive={false} />
+          <Area dataKey="base" stackId="fan" stroke="none" fill="transparent" baseValue={yDomain[0]} isAnimationActive={false} />
           <Area dataKey="lowBand" stackId="fan" stroke="none" fill="#6366f1" fillOpacity={0.15} isAnimationActive={false} />
           <Area dataKey="midBand" stackId="fan" stroke="none" fill="#6366f1" fillOpacity={0.35} isAnimationActive={false} />
           <Area dataKey="highBand" stackId="fan" stroke="none" fill="#6366f1" fillOpacity={0.15} isAnimationActive={false} />

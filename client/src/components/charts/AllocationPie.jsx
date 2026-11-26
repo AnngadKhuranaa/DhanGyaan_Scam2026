@@ -10,8 +10,8 @@ export default function AllocationPie({ allocation }) {
   const colorFor = (a, i) => (a.name === 'Cash' ? CASH : COLORS[i % COLORS.length]);
 
   return (
-    <div className="grid items-center gap-4 sm:grid-cols-[180px_1fr]">
-      <div className="mx-auto h-44 w-44" role="img" aria-label="Portfolio allocation chart">
+    <div className="flex flex-wrap items-center justify-center gap-6">
+      <div className="h-44 w-44 shrink-0" role="img" aria-label="Portfolio allocation chart">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie data={data} dataKey="value" nameKey="name" innerRadius="58%" outerRadius="100%" paddingAngle={1} stroke="none" isAnimationActive={false}>
@@ -23,7 +23,7 @@ export default function AllocationPie({ allocation }) {
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <ul className="space-y-1.5 text-sm">
+      <ul className="min-w-[200px] flex-1 space-y-1.5 text-sm">
         {data.map((a, i) => (
           <li key={a.name} className="flex items-center justify-between gap-3">
             <span className="flex min-w-0 items-center gap-2">

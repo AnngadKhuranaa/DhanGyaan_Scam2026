@@ -232,7 +232,7 @@ export default function Portfolio() {
             <Stat label="Cash" value={formatCurrency(data.cash, 'INR', 0)} sub={<span className="muted">available to trade</span>} />
           </div>
 
-          <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+          <div className="grid gap-6 2xl:grid-cols-[1fr_360px]">
             <section className="card" aria-labelledby="holdings-title">
               <div className="mb-3 flex items-center justify-between">
                 <h2 id="holdings-title" className="card-title">Holdings</h2>

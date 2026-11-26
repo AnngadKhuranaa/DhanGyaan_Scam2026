@@ -19,7 +19,7 @@ import User from '../models/User.js';
 import Portfolio from '../models/Portfolio.js';
 import Trade from '../models/Trade.js';
 import Watchlist from '../models/Watchlist.js';
-import { getHistory } from '../services/marketData.service.js';
+import { getHistory, getQuotes } from '../services/marketData.service.js';
 import { executeTrade } from '../services/trade.service.js';
 
 // [symbol, side, quantity, trading days ago]
@@ -110,7 +110,8 @@ async function main() {
   }
 
   const demo = await User.findOne({ username: config.demoUsername });
-  await Watchlist.create({ userId: demo._id, items: DEMO_WATCHLIST.map((symbol) => ({ symbol, name: '' })) });
+  const names = await getQuotes(DEMO_WATCHLIST);
+  await Watchlist.create({ userId: demo._id, items: DEMO_WATCHLIST.map((symbol) => ({ symbol, name: names.get(symbol)?.shortName || '' })) });
   console.log(`\nWatchlist: ${DEMO_WATCHLIST.join(', ')}`);
   console.log('\nDone. Use "Try the demo" on the landing page to log in.');
 }

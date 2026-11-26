@@ -282,7 +282,7 @@ intended for development; without a key the app still works and labels sentiment
 
 ## Hackathon context
 
-DhanGyaan began as a team submission to the **Finvasia hackathon**, where it reached the **finals**. The hackathon build
+DhanGyaan began as a submission to the **Finvasia hackathon**, where it reached the **finals**. The hackathon build
 proved the idea but relied on placeholders: mock market data, random confidence scores, a client-trusted trade flow and
 unrouted pages. This version keeps the original stack and vision and rebuilds the internals so that every feature
 genuinely works:

@@ -10,7 +10,8 @@ const level =
 const logger = winston.createLogger({
   level,
   format: combine(
-    colorize(),
+    // ANSI colours only locally; hosted log viewers show them as garbage.
+    ...(process.env.NODE_ENV === 'production' ? [] : [colorize()]),
     timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
     errors({ stack: true }),
     printf(({ level: lvl, message, timestamp: ts, stack }) => `${ts} [${lvl}]: ${stack || message}`)

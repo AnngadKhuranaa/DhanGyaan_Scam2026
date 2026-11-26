@@ -1,0 +1,31 @@
+# Render Blueprint for the DhanGyaan API (https://render.com/docs/blueprint-spec)
+# New > Blueprint > pick this repo. Secrets marked sync:false are entered in the dashboard.
+services:
+  - type: web
+    name: dhangyaan-api
+    runtime: node
+    rootDir: server
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: MONGO_URI # MongoDB Atlas connection string (Atlas clusters are replica sets)
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CLIENT_URL # e.g. https://dhangyaan.vercel.app (comma-separate several)
+        sync: false
+      - key: NEWS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false

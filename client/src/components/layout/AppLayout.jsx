@@ -1,15 +1,20 @@
-import { Suspense, useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { useWatchlistStore } from '../../store/watchlistStore';
-import AIChatModal from '../AIChatModal';
-import StockDetailDrawer from '../StockDetailDrawer';
+import useUIStore from '../../store/useUIStore';
 import { PageSkeleton } from '../ui/PageSkeleton';
 import Navbar from './Navbar';
 import Sidebar from './Sidebar';
 
+// Heavy overlays (charting library, chat) download only the first time they open.
+const StockDetailDrawer = lazy(() => import('../StockDetailDrawer'));
+const AIChatModal = lazy(() => import('../AIChatModal'));
+
 /** Shell for every signed-in page: sidebar, top bar, page outlet, global drawers. */
 export default function AppLayout() {
   const loadWatchlist = useWatchlistStore((s) => s.load);
+  const drawerOpen = useUIStore((s) => Boolean(s.detailSymbol));
+  const aiOpen = useUIStore((s) => s.ai.open);
   useEffect(() => {
     loadWatchlist();
   }, [loadWatchlist]);
@@ -31,8 +36,10 @@ export default function AppLayout() {
           Market data from Yahoo Finance, may be delayed. Paper trading with virtual money · Educational use only, not financial advice.
         </footer>
       </div>
-      <StockDetailDrawer />
-      <AIChatModal />
+      <Suspense fallback={null}>
+        {drawerOpen && <StockDetailDrawer />}
+        {aiOpen && <AIChatModal />}
+      </Suspense>
     </div>
   );
 }

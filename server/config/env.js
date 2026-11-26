@@ -57,3 +57,8 @@ export function env() {
   if (!cached) cached = loadEnv();
   return cached;
 }
+
+/** Test hook: re-read process.env on the next env() call. */
+export function resetEnvCache() {
+  cached = undefined;
+}

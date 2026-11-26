@@ -40,7 +40,11 @@ export const errorHandler = (err, req, res, next) => {
     message = 'Malformed JSON body';
   }
 
-  if (status >= 500) {
+  if (err instanceof ApiError && status >= 500) {
+    // Expected operational failures (e.g. Yahoo down -> 503): one line, no stack.
+    logger.warn(`${req.method} ${req.originalUrl} -> ${status} ${message}`);
+  } else if (status >= 500) {
+    // Anything else is a bug: log the full stack.
     logger.error(`${req.method} ${req.originalUrl} -> ${err.stack || err}`);
   }
 
